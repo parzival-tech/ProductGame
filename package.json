@@ -1,0 +1,16 @@
+{
+  "name": "javascript-game",
+  "version": "1.0.0",
+  "description": "A simple JavaScript game",
+  "main": "script.js",
+  "scripts": {
+    "start": "echo \"No start script configured. Open index.html in a browser.\" && exit 1"
+  },
+  "keywords": [
+    "game",
+    "javascript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {}
+} 

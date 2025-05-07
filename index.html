@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product vs. Project Management Challenge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: none; /* Prevent scrolling on touch for drag operations */
+        }
+        .draggable {
+            touch-action: none; /* Important for touch devices */
+            user-select: none; /* Prevent text selection during drag */
+        }
+        .drop-zone {
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .drop-zone.hovered {
+            background-color: #e0f2fe; /* light-blue-100 */
+            transform: scale(1.03);
+        }
+        .statement-card {
+            cursor: grab;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .statement-card:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .correct-animation {
+            animation: correct-pulse 0.5s ease-out;
+        }
+        @keyframes correct-pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); } /* green-400 */
+            50% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(74, 222, 128, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+        }
+        .incorrect-animation {
+            animation: incorrect-shake 0.5s ease-out;
+        }
+        @keyframes incorrect-shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+        .message-box {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: none;
+        }
+        .message-box.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .message-box.correct {
+            background-color: #dcfce7; /* green-100 */
+            color: #166534; /* green-800 */
+            border: 1px solid #4ade80; /* green-400 */
+        }
+        .message-box.incorrect {
+            background-color: #fee2e2; /* red-100 */
+            color: #991b1b; /* red-800 */
+            border: 1px solid #f87171; /* red-400 */
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-sky-700">Product vs. Project Management</h1>
+            <p class="text-slate-600 mt-2 text-lg">Drag the statement to the correct role!</p>
+        </header>
+
+        <div id="score-area" class="text-center mb-6">
+            <p class="text-xl font-semibold">Score: <span id="score" class="text-sky-600">0</span> | Statements Remaining: <span id="statements-left" class="text-sky-600">0</span></p>
+        </div>
+
+        <div id="game-area" class="mb-8">
+            <div id="statement-container" class="min-h-[100px] flex items-center justify-center p-4">
+                </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div id="product-zone" class="drop-zone bg-sky-500/20 border-2 border-sky-500 border-dashed rounded-lg p-6 min-h-[150px] flex flex-col items-center justify-center text-center">
+                <h2 class="text-2xl font-semibold text-sky-700 mb-2">Product Management</h2>
+                <p class="text-sky-600">Focuses on the 'What' & 'Why'</p>
+            </div>
+            <div id="project-zone" class="drop-zone bg-amber-500/20 border-2 border-amber-500 border-dashed rounded-lg p-6 min-h-[150px] flex flex-col items-center justify-center text-center">
+                <h2 class="text-2xl font-semibold text-amber-700 mb-2">Project Management</h2>
+                <p class="text-amber-600">Focuses on the 'How' & 'When'</p>
+            </div>
+        </div>
+        
+        <div id="controls" class="text-center">
+            <button id="next-button" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out hidden">
+                Next Statement
+            </button>
+             <button id="restart-button" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out hidden ml-4">
+                Restart Game
+            </button>
+        </div>
+
+        <div id="game-over-message" class="text-center mt-10 p-6 bg-white rounded-lg shadow-xl hidden">
+            <h2 class="text-3xl font-bold text-sky-700 mb-4">Game Over!</h2>
+            <p class="text-xl text-slate-700">Your final score is: <span id="final-score" class="font-bold text-sky-600">0</span></p>
+            <p class="text-slate-600 mt-2">You got <span id="correct-answers"></span> out of <span id="total-questions"></span> correct.</p>
+        </div>
+    </div>
+
+    <div id="feedback-message" class="message-box"></div>
+
+    <script>
+        // Game data: Statements and their correct category
+        const gameStatements = [
+            { text: "Defining the long-term vision and strategy for a new app.", category: "product" },
+            { text: "Creating a detailed schedule and assigning tasks for developing a new website feature.", category: "project" },
+            { text: "Conducting market research to understand customer needs for a future product line.", category: "product" },
+            { text: "Managing the budget and resources for a 6-month software development initiative.", category: "project" },
+            { text: "Prioritizing which features to build next based on user feedback and business goals.", category: "product" },
+            { text: "Ensuring a marketing campaign is launched by the agreed-upon deadline.", category: "project" },
+            { text: "Continuously monitoring a product's performance in the market and identifying areas for improvement.", category: "product" },
+            { text: "Coordinating with different teams (dev, design, QA) to deliver a specific software update.", category: "project" },
+            { text: "Deciding if a product should be retired or updated based on market trends.", category: "product" },
+            { text: "Tracking progress against a specific project plan and reporting status to stakeholders.", category: "project" },
+            { text: "Answering 'Why are we building this?' and 'What problem does this solve?'", category: "product" },
+            { text: "Answering 'How will we get this done?' and 'When will it be ready?'", category: "project" }
+        ];
+
+        let currentStatementIndex = 0;
+        let score = 0;
+        let shuffledStatements = [];
+
+        // DOM Elements
+        const statementContainer = document.getElementById('statement-container');
+        const productZone = document.getElementById('product-zone');
+        const projectZone = document.getElementById('project-zone');
+        const scoreDisplay = document.getElementById('score');
+        const statementsLeftDisplay = document.getElementById('statements-left');
+        const nextButton = document.getElementById('next-button');
+        const restartButton = document.getElementById('restart-button');
+        const gameOverMessage = document.getElementById('game-over-message');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const correctAnswersDisplay = document.getElementById('correct-answers');
+        const totalQuestionsDisplay = document.getElementById('total-questions');
+        const feedbackMessage = document.getElementById('feedback-message');
+        
+        let draggableElement = null; // To keep track of the element being dragged
+
+        // --- Utility Functions ---
+        function shuffleArray(array) {
+            // Fisher-Yates shuffle algorithm
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function showFeedback(message, type) {
+            feedbackMessage.textContent = message;
+            feedbackMessage.className = 'message-box show'; // Reset classes and add show
+            if (type === 'correct') {
+                feedbackMessage.classList.add('correct');
+            } else {
+                feedbackMessage.classList.add('incorrect');
+            }
+            setTimeout(() => {
+                feedbackMessage.classList.remove('show');
+            }, 2000);
+        }
+
+        // --- Game Logic ---
+        function startGame() {
+            currentStatementIndex = 0;
+            score = 0;
+            shuffledStatements = shuffleArray([...gameStatements]); // Create a shuffled copy
+            updateScoreDisplay();
+            gameOverMessage.classList.add('hidden');
+            nextButton.classList.add('hidden');
+            restartButton.classList.add('hidden');
+            productZone.classList.remove('correct-animation', 'incorrect-animation');
+            projectZone.classList.remove('correct-animation', 'incorrect-animation');
+            loadStatement();
+        }
+
+        function loadStatement() {
+            if (currentStatementIndex < shuffledStatements.length) {
+                const statementData = shuffledStatements[currentStatementIndex];
+                statementContainer.innerHTML = `
+                    <div id="current-statement" draggable="true" class="draggable statement-card bg-white p-6 rounded-lg shadow-lg text-center text-slate-700 w-full max-w-md">
+                        ${statementData.text}
+                    </div>
+                `;
+                draggableElement = document.getElementById('current-statement');
+                addDragListeners(draggableElement);
+                statementsLeftDisplay.textContent = shuffledStatements.length - currentStatementIndex;
+                nextButton.classList.add('hidden'); // Hide next button until an answer is made
+            } else {
+                endGame();
+            }
+        }
+
+        function updateScoreDisplay() {
+            scoreDisplay.textContent = score;
+        }
+
+        function handleDrop(event, category) {
+            event.preventDefault(); // Prevent default browser behavior
+            if (!draggableElement) return;
+
+            const statementData = shuffledStatements[currentStatementIndex];
+            const targetZone = category === 'product' ? productZone : projectZone;
+            const otherZone = category === 'product' ? projectZone : productZone;
+
+            targetZone.classList.remove('hovered');
+            otherZone.classList.remove('hovered');
+
+
+            if (statementData.category === category) {
+                score++;
+                showFeedback('Correct!', 'correct');
+                targetZone.classList.add('correct-animation');
+                setTimeout(() => targetZone.classList.remove('correct-animation'), 500);
+            } else {
+                showFeedback('Oops! That belongs to ' + (statementData.category === 'product' ? 'Product Management.' : 'Project Management.'), 'incorrect');
+                targetZone.classList.add('incorrect-animation');
+                 setTimeout(() => targetZone.classList.remove('incorrect-animation'), 500);
+            }
+            
+            updateScoreDisplay();
+            draggableElement.remove(); // Remove the dragged statement
+            draggableElement = null; // Clear the reference
+            
+            currentStatementIndex++;
+            if (currentStatementIndex < shuffledStatements.length) {
+                 nextButton.classList.remove('hidden'); // Show next button
+            } else {
+                endGame();
+            }
+        }
+
+        function endGame() {
+            statementContainer.innerHTML = '';
+            gameOverMessage.classList.remove('hidden');
+            finalScoreDisplay.textContent = score;
+            correctAnswersDisplay.textContent = score;
+            totalQuestionsDisplay.textContent = shuffledStatements.length;
+            nextButton.classList.add('hidden');
+            restartButton.classList.remove('hidden');
+        }
+
+        // --- Drag and Drop Event Handlers ---
+        function addDragListeners(element) {
+            element.addEventListener('dragstart', (event) => {
+                // The dataTransfer.setData is necessary for Firefox to enable dragging.
+                // The actual data can be minimal if not used, but it must be set.
+                event.dataTransfer.setData('text/plain', event.target.id || 'draggable');
+                event.dataTransfer.effectAllowed = 'move';
+                // A slight delay to allow the browser to render the drag image before styling is applied
+                setTimeout(() => {
+                    event.target.classList.add('opacity-50'); // Make it semi-transparent while dragging
+                }, 0);
+            });
+
+            element.addEventListener('dragend', (event) => {
+                event.target.classList.remove('opacity-50');
+                // Ensure hover states are cleared if drag ends outside a valid zone
+                productZone.classList.remove('hovered');
+                projectZone.classList.remove('hovered');
+            });
+
+            // Touch events for mobile compatibility
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let originalPosition = { x: 0, y: 0 };
+            let clone = null; // For visual feedback during touch drag
+
+            element.addEventListener('touchstart', (event) => {
+                if (event.touches.length === 1) {
+                    const touch = event.touches[0];
+                    touchStartX = touch.clientX;
+                    touchStartY = touch.clientY;
+                    
+                    // Create a clone for dragging visual
+                    clone = element.cloneNode(true);
+                    clone.style.position = 'absolute';
+                    clone.style.zIndex = '1000';
+                    clone.style.pointerEvents = 'none'; // So it doesn't interfere with touchmove on original
+                    clone.style.opacity = '0.7';
+                    document.body.appendChild(clone);
+                    
+                    // Position clone at touch point
+                    const rect = element.getBoundingClientRect();
+                    originalPosition.x = rect.left;
+                    originalPosition.y = rect.top;
+                    clone.style.left = `${originalPosition.x}px`;
+                    clone.style.top = `${originalPosition.y}px`;
+                    clone.style.width = `${rect.width}px`; // Maintain width
+
+                    element.style.opacity = '0.3'; // Dim original element
+                }
+            }, { passive: false }); // passive: false to allow preventDefault if needed
+
+            element.addEventListener('touchmove', (event) => {
+                if (event.touches.length === 1 && clone) {
+                    event.preventDefault(); // Prevent page scrolling
+                    const touch = event.touches[0];
+                    const deltaX = touch.clientX - touchStartX;
+                    const deltaY = touch.clientY - touchStartY;
+                    
+                    clone.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+
+                    // Check for hover over drop zones
+                    const cloneRect = clone.getBoundingClientRect();
+                    if (isOverlapping(cloneRect, productZone.getBoundingClientRect())) {
+                        productZone.classList.add('hovered');
+                        projectZone.classList.remove('hovered');
+                    } else if (isOverlapping(cloneRect, projectZone.getBoundingClientRect())) {
+                        projectZone.classList.add('hovered');
+                        productZone.classList.remove('hovered');
+                    } else {
+                        productZone.classList.remove('hovered');
+                        projectZone.classList.remove('hovered');
+                    }
+                }
+            }, { passive: false });
+
+            element.addEventListener('touchend', (event) => {
+                if (clone) {
+                    let droppedOnZone = null;
+                    const cloneRect = clone.getBoundingClientRect();
+
+                    if (isOverlapping(cloneRect, productZone.getBoundingClientRect())) {
+                        droppedOnZone = 'product';
+                    } else if (isOverlapping(cloneRect, projectZone.getBoundingClientRect())) {
+                        droppedOnZone = 'project';
+                    }
+                    
+                    document.body.removeChild(clone);
+                    clone = null;
+                    element.style.opacity = '1'; // Restore original element opacity
+                    productZone.classList.remove('hovered');
+                    projectZone.classList.remove('hovered');
+
+                    if (droppedOnZone) {
+                        // Simulate a drop event for the handleDrop function
+                        const fakeEvent = { preventDefault: () => {} };
+                        handleDrop(fakeEvent, droppedOnZone);
+                    }
+                }
+            });
+        }
+        
+        function isOverlapping(rect1, rect2) {
+            return !(rect1.right < rect2.left || 
+                     rect1.left > rect2.right || 
+                     rect1.bottom < rect2.top || 
+                     rect1.top > rect2.bottom);
+        }
+
+
+        [productZone, projectZone].forEach(zone => {
+            zone.addEventListener('dragover', (event) => {
+                event.preventDefault(); // Necessary to allow dropping
+                event.dataTransfer.dropEffect = 'move';
+                zone.classList.add('hovered');
+            });
+
+            zone.addEventListener('dragleave', (event) => {
+                zone.classList.remove('hovered');
+            });
+
+            zone.addEventListener('drop', (event) => {
+                const category = zone.id === 'product-zone' ? 'product' : 'project';
+                handleDrop(event, category);
+            });
+        });
+
+        // Event Listeners for buttons
+        nextButton.addEventListener('click', loadStatement);
+        restartButton.addEventListener('click', startGame);
+
+        // Initialize Game
+        window.onload = startGame;
+    </script>
+</body>
+</html> 
